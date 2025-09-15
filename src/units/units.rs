@@ -31,9 +31,9 @@ impl Plugin for UnitsPlugin {
                 move_and_collide_units_system,
                 player_control_system,
                 update_sprite_facing_system.after(move_and_collide_units_system),
-                // display_units_with_no_current_action_system
-                //     .run_if(on_timer(Duration::from_secs(5))),
-                // display_units_inventory_system.run_if(on_timer(Duration::from_secs(5))),
+                display_units_with_no_current_action_system
+                    .run_if(on_timer(Duration::from_secs(5))),
+                display_units_inventory_system.run_if(on_timer(Duration::from_secs(5))),
             ),
         );
     }
