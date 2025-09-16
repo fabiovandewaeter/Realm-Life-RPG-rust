@@ -1,9 +1,11 @@
-use crate::UPS_TARGET;
 use crate::map::{
-    GridPos, StructureManager, get_neighbors, is_tile_passable, world_pos_to_rounded_tile,
+    CurrentMap, GridPos, MapId, MultiMapManager, StructureManager, get_neighbors, is_tile_passable,
+    world_pos_to_rounded_tile,
 };
+use crate::units::Unit;
 use crate::units::movements::{Direction, TileMovement};
 use crate::units::tasks::{ActionQueue, CurrentAction, reset_actions_system};
+use crate::{UPS_TARGET, map};
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use std::cmp::Ordering;
@@ -125,11 +127,13 @@ fn reconstruct_path(
 fn find_path(
     start_grid: GridPos,
     end_grid: GridPos,
-    structure_manager: &Res<StructureManager>,
+    map_id: MapId,
+    multi_map_manager: &Res<MultiMapManager>,
 ) -> Option<VecDeque<GridPos>> {
     // if target not reachable, find nearest passable tile
-    let actual_end_grid = if !is_tile_passable(end_grid, structure_manager) {
-        find_nearest_passable_tile(end_grid, start_grid, structure_manager).unwrap_or(start_grid)
+    let actual_end_grid = if !is_tile_passable(end_grid, map_id, multi_map_manager) {
+        find_nearest_passable_tile(end_grid, start_grid, map_id, multi_map_manager)
+            .unwrap_or(start_grid)
     } else {
         end_grid
     };
@@ -196,14 +200,14 @@ fn find_path(
                     y: current_node.pos.y,
                 };
 
-                if !is_tile_passable(corner_1, structure_manager)
-                    || !is_tile_passable(corner_2, structure_manager)
+                if !is_tile_passable(corner_1, map_id, multi_map_manager)
+                    || !is_tile_passable(corner_2, map_id, multi_map_manager)
                 {
                     continue;
                 }
             }
 
-            if !is_tile_passable(neighbor_pos, structure_manager) {
+            if !is_tile_passable(neighbor_pos, map_id, multi_map_manager) {
                 continue;
             }
 
@@ -240,7 +244,8 @@ fn find_path(
 fn find_nearest_passable_tile(
     target: GridPos,
     start: GridPos,
-    structure_manager: &Res<StructureManager>,
+    map_id: MapId,
+    multi_map_manager: &Res<MultiMapManager>,
 ) -> Option<GridPos> {
     // Calcule la direction d'approche depuis le point de départ
     let approach_dir = IVec2::new((target.x - start.x).signum(), (target.y - start.y).signum());
@@ -281,7 +286,7 @@ fn find_nearest_passable_tile(
         // Réduit le rayon pour être plus efficace
         for &dir in &directions {
             let candidate = target + dir * radius;
-            if is_tile_passable(candidate, structure_manager) {
+            if is_tile_passable(candidate, map_id, multi_map_manager) {
                 return Some(candidate);
             }
         }
@@ -293,14 +298,16 @@ fn find_nearest_passable_tile(
 // ========== SYSTÈMES BEVY ==========
 /// Système qui calcule le chemin pour les agents.
 pub fn pathfinding_system(
-    mut agents_query: Query<(&mut PathfindingAgent, &GridPos)>,
-    structure_manager: Res<StructureManager>,
+    mut agents_query: Query<(&mut PathfindingAgent, &GridPos, &CurrentMap)>,
+    multi_map_manager: Res<MultiMapManager>,
 ) {
-    for (mut agent, grid_pos) in agents_query.iter_mut() {
+    for (mut agent, grid_pos, current_map) in agents_query.iter_mut() {
         if let Some(target) = agent.target {
             // let start_tile = world_pos_to_rounded_tile(transform.translation.xy());
             if agent.path.is_empty() {
-                if let Some(new_path) = find_path(*grid_pos, target, &structure_manager) {
+                if let Some(new_path) =
+                    find_path(*grid_pos, target, current_map.map_id, &multi_map_manager)
+                {
                     agent.path = new_path;
                 } else {
                     agent.reset();

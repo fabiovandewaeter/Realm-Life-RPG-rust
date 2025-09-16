@@ -1,12 +1,12 @@
 use crate::{
     UPS_TARGET,
     map::{
-        GridPos, Structure, StructureManager, is_tile_passable, rounded_tile_pos_to_world,
-        world_pos_to_rounded_tile,
+        CurrentMap, GridPos, MapData, MapId, MultiMapManager, Structure, StructureManager,
+        is_tile_passable, rounded_tile_pos_to_world, world_pos_to_rounded_tile,
     },
     units::{Unit, UnitUnitCollisions},
 };
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 use std::collections::HashSet;
 
 pub const UNIT_DEFAULT_MOVEMENT_SPEED: u32 = UPS_TARGET as u32; // ticks per tile ; smaller is faster (here its 1 tile per second at normal tickrate by default)
@@ -88,32 +88,44 @@ impl TileMovement {
     }
 }
 
+type MapUnits = HashMap<MapId, Vec<GridPos>>;
+
 pub fn move_and_collide_units_system(
-    structure_manager: Res<StructureManager>,
+    multi_map_manager: Res<MultiMapManager>,
     mut unit_query: Query<
         (
             Entity,
             &mut GridPos,
             &mut TileMovement,
+            &CurrentMap,
             Has<UnitUnitCollisions>,
         ),
         With<Unit>,
     >,
 ) {
-    // Collecte des tiles occupées en une seule passe
-    let occupied_tiles = collect_occupied_tiles(&unit_query);
+    // Collecte des tiles occupées par map
+    let occupied_tiles_by_map = collect_occupied_tiles_by_map(&unit_query);
 
     // Traitement des mouvements
-    for (entity, mut grid_pos, mut tile_movement, has_unit_collisions) in unit_query.iter_mut() {
+    for (entity, mut grid_pos, mut tile_movement, current_map, has_unit_collisions) in
+        unit_query.iter_mut()
+    {
         if !should_process_movement(&mut tile_movement) {
             continue;
         }
 
+        // Récupérer les tiles occupées pour cette map spécifique
+        let occupied_tiles = occupied_tiles_by_map
+            .get(&current_map.map_id)
+            .map(|tiles| tiles.as_slice())
+            .unwrap_or(&[]);
+
         match calculate_movement(
             *grid_pos,
             tile_movement.direction,
-            &structure_manager,
-            &occupied_tiles,
+            current_map.map_id,
+            &multi_map_manager,
+            occupied_tiles,
             has_unit_collisions,
         ) {
             MovementResult::Success {
@@ -158,23 +170,30 @@ enum MovementResult {
     Blocked,
 }
 
-// Fonctions helper pour séparer les responsabilités
-fn collect_occupied_tiles(
+fn collect_occupied_tiles_by_map(
     unit_query: &Query<
         (
             Entity,
             &mut GridPos,
             &mut TileMovement,
+            &CurrentMap,
             Has<UnitUnitCollisions>,
         ),
         With<Unit>,
     >,
-) -> HashSet<GridPos> {
-    unit_query
-        .iter()
-        .filter(|(_, _, _, has_collisions)| *has_collisions)
-        .map(|(_, grid_pos, _, _)| *grid_pos)
-        .collect()
+) -> MapUnits {
+    let mut occupied_by_map = HashMap::new();
+
+    for (_, grid_pos, _, current_map, has_collisions) in unit_query.iter() {
+        if has_collisions {
+            occupied_by_map
+                .entry(current_map.map_id)
+                .or_insert_with(Vec::new)
+                .push(*grid_pos);
+        }
+    }
+
+    occupied_by_map
 }
 
 fn should_process_movement(tile_movement: &mut TileMovement) -> bool {
@@ -195,8 +214,9 @@ fn should_process_movement(tile_movement: &mut TileMovement) -> bool {
 fn calculate_movement(
     current_tile: GridPos,
     desired_direction: Direction,
-    structure_manager: &Res<StructureManager>,
-    occupied_tiles: &HashSet<GridPos>,
+    map_id: MapId,                            // Nouvelle: ID de la map
+    multi_map_manager: &Res<MultiMapManager>, // Nouvelle: gestionnaire de maps
+    occupied_tiles: &[GridPos],               // Changé: slice au lieu de HashSet
     has_unit_collisions: bool,
 ) -> MovementResult {
     let desired_delta = desired_direction.delta();
@@ -207,7 +227,8 @@ fn calculate_movement(
         if let Some(result) = handle_diagonal_movement(
             current_tile,
             desired_delta,
-            structure_manager,
+            map_id,
+            multi_map_manager,
             occupied_tiles,
             has_unit_collisions,
         ) {
@@ -218,7 +239,8 @@ fn calculate_movement(
     // Mouvement direct possible ?
     if can_move_to(
         desired_target,
-        structure_manager,
+        map_id,
+        multi_map_manager,
         occupied_tiles,
         has_unit_collisions,
     ) {
@@ -233,7 +255,8 @@ fn calculate_movement(
         try_axis_movement(
             current_tile,
             desired_delta,
-            structure_manager,
+            map_id,
+            multi_map_manager,
             occupied_tiles,
             has_unit_collisions,
         )
@@ -249,8 +272,9 @@ fn is_diagonal_movement(delta: IVec2) -> bool {
 fn handle_diagonal_movement(
     current_tile: GridPos,
     desired_delta: IVec2,
-    structure_manager: &Res<StructureManager>,
-    occupied_tiles: &HashSet<GridPos>,
+    map_id: MapId,
+    multi_map_manager: &Res<MultiMapManager>,
+    occupied_tiles: &[GridPos],
     has_unit_collisions: bool,
 ) -> Option<MovementResult> {
     let tile_x = current_tile + IVec2::new(desired_delta.x, 0);
@@ -259,13 +283,15 @@ fn handle_diagonal_movement(
     // Interdiction si les deux cases orthogonales sont bloquées
     let can_move_x = can_move_to(
         tile_x,
-        structure_manager,
+        map_id,
+        multi_map_manager,
         occupied_tiles,
         has_unit_collisions,
     );
     let can_move_y = can_move_to(
         tile_y,
-        structure_manager,
+        map_id,
+        multi_map_manager,
         occupied_tiles,
         has_unit_collisions,
     );
@@ -280,8 +306,9 @@ fn handle_diagonal_movement(
 fn try_axis_movement(
     current_tile: GridPos,
     desired_delta: IVec2,
-    structure_manager: &Res<StructureManager>,
-    occupied_tiles: &HashSet<GridPos>,
+    map_id: MapId,
+    multi_map_manager: &Res<MultiMapManager>,
+    occupied_tiles: &[GridPos],
     has_unit_collisions: bool,
 ) -> MovementResult {
     let axis_y_tile = current_tile + IVec2::new(0, desired_delta.y);
@@ -290,7 +317,8 @@ fn try_axis_movement(
     // Priorité Nord/Sud avant Est/Ouest
     if can_move_to(
         axis_y_tile,
-        structure_manager,
+        map_id,
+        multi_map_manager,
         occupied_tiles,
         has_unit_collisions,
     ) {
@@ -300,7 +328,8 @@ fn try_axis_movement(
         }
     } else if can_move_to(
         axis_x_tile,
-        structure_manager,
+        map_id,
+        multi_map_manager,
         occupied_tiles,
         has_unit_collisions,
     ) {
@@ -313,14 +342,27 @@ fn try_axis_movement(
     }
 }
 
+// Nouvelle fonction adaptée pour multi-maps
 fn can_move_to(
     tile: GridPos,
-    structure_manager: &Res<StructureManager>,
-    occupied_tiles: &HashSet<GridPos>,
+    map_id: MapId,
+    multi_map_manager: &Res<MultiMapManager>,
+    occupied_tiles: &[GridPos], // Vec au lieu de slice
     has_unit_collisions: bool,
 ) -> bool {
-    is_tile_passable(tile, structure_manager)
-        && (!has_unit_collisions || !occupied_tiles.contains(&tile))
+    // Vérifier les obstacles (murs, etc.) spécifiques à cette map
+    let is_passable = if let Some(map_data) = multi_map_manager.get_map(map_id) {
+        // Utiliser le StructureManager de cette map spécifique
+        map_data.structure_manager.structures.get(&tile).is_none()
+    } else {
+        // Si la map n'existe pas, considérer comme non-passable
+        false
+    };
+
+    // Vérifier les collisions avec d'autres unités (seulement sur la même map)
+    let is_free_of_units = !has_unit_collisions || !occupied_tiles.contains(&tile);
+
+    is_passable && is_free_of_units
 }
 
 pub fn update_sprite_facing_system(mut query: Query<(&TileMovement, &mut Transform)>) {
@@ -344,4 +386,10 @@ pub fn update_sprite_facing_system(mut query: Query<(&TileMovement, &mut Transfo
             }
         }
     }
+}
+
+#[derive(Component)]
+pub struct JustTeleported {
+    pub from_portal: Entity,
+    pub steps_taken: u32, // Compte les mouvements volontaires
 }

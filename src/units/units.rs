@@ -1,6 +1,6 @@
 use crate::{
     items::Inventory,
-    map::GridPos,
+    map::{CurrentMap, GridPos},
     pathfinding::PathfindingAgent,
     units::{
         movements::{
@@ -49,7 +49,8 @@ impl Plugin for UnitsPlugin {
     Inventory,
     ActionQueue,
     CurrentAction,
-    CurrentTask
+    CurrentTask,
+     CurrentMap
 )]
 pub struct Unit {
     pub name: String,
