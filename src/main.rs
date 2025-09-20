@@ -15,11 +15,12 @@ use realm_life_rpg::{
     units::{
         Player, Unit, UnitUnitCollisions, UnitsPlugin,
         movements::{Direction, TileMovement},
-        states::Available,
+        states::{Available, Emotions},
         tasks::{TasksPlugin, display_reservations_system},
     },
 };
 use std::time::Duration;
+use tera::{Context, Tera};
 
 fn main() {
     App::new()
@@ -54,6 +55,7 @@ fn main() {
                 handle_camera_inputs_system,
                 display_fps_ups_system,
                 control_time_system,
+                generate_npc_dialogue,
             ),
         )
         .add_systems(
@@ -67,6 +69,60 @@ fn main() {
         .run();
 }
 
+#[derive(Component)]
+struct PersonName(String);
+
+#[derive(Component)]
+struct Npc;
+
+// Système qui gère l'interaction et génère la phrase.
+fn generate_npc_dialogue(
+    // Détecter l'appui sur la touche Espace.
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    // Accéder aux ressources globales.
+    dialogue_engine: Res<DialogueEngine>,
+    world_state: Res<WorldState>,
+    // Récupérer les données des entités PNJ et Joueur.
+    query_npc: Query<(&PersonName, &Emotions), With<Npc>>,
+    query_player: Query<&PersonName, With<Player>>,
+) {
+    // On ne fait rien si la touche n'est pas pressée.
+    if !keyboard_input.just_pressed(KeyCode::KeyK) {
+        return;
+    }
+
+    // On récupère le premier PNJ et le premier joueur trouvés (pour cet exemple simple).
+    let Ok((npc_name, npc_emotions)) = query_npc.get_single() else {
+        return;
+    };
+    let Ok(player_name) = query_player.get_single() else {
+        return;
+    };
+
+    // 1. On crée le "contexte" : c'est l'ensemble des données pour le template.
+    let mut context = Context::new();
+    context.insert("player_name", &player_name.0);
+    context.insert("emotions", npc_emotions); // On passe toute la struct Emotions
+    context.insert("weather", &world_state.weather);
+
+    // let names = dialogue_engine.tera.get_template_names();
+    // for n in names {
+    //     println!("{}", n);
+    // }
+
+    // 2. On "rend" le template avec le contexte.
+    match dialogue_engine.tera.render("npc_greetings.tera", &context) {
+        Ok(rendered_text) => {
+            // On nettoie le texte des espaces superflus.
+            let final_text = rendered_text.trim().to_string();
+            println!("[{}] dit : \"{}\"", npc_name.0, final_text);
+        }
+        Err(e) => {
+            eprintln!("Erreur de rendu du dialogue : {}", e);
+        }
+    }
+}
+
 fn setup_system(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -75,6 +131,20 @@ fn setup_system(
     // mut chunk_manager: ResMut<ChunkManager>,
     mut multi_map_manager: ResMut<MultiMapManager>,
 ) {
+    let tera =
+        Tera::new("assets/dialogues/*.tera").expect("Erreur de chargement des templates Tera");
+    commands.insert_resource(DialogueEngine { tera });
+    commands.insert_resource(WorldState {
+        weather: "Pluie".to_string(),
+    });
+    // On crée l'entité du joueur.
+    commands.spawn((Player, PersonName("Aventureux".to_string())));
+    commands.spawn((
+        Npc,
+        PersonName("Gérard le Garde".to_string()),
+        Emotions { colere: 0.53 }, // 53% de colère
+    ));
+
     let mut orthographic_projection = OrthographicProjection::default_2d();
     orthographic_projection.scale *= 0.8;
     let projection = Projection::Orthographic(orthographic_projection);
@@ -127,7 +197,7 @@ fn setup_system(
         TileMovement::new(speed),
         UnitUnitCollisions,
         CurrentMap::default(),
-        Player,
+        // Player,
     ));
     // CRÉER UNE MAISON AVEC PORTAILS
     println!("Creating house...");
@@ -174,199 +244,6 @@ fn setup_system(
         ))
         .id();
 }
-
-// fn setup_system(
-//     mut commands: Commands,
-//     mut meshes: ResMut<Assets<Mesh>>,
-//     mut materials: ResMut<Assets<ColorMaterial>>,
-//     asset_server: Res<AssetServer>,
-//     mut structure_manager: ResMut<StructureManager>,
-//     mut chunk_manager: ResMut<ChunkManager>,
-// ) {
-//     let mut orthographic_projection = OrthographicProjection::default_2d();
-//     orthographic_projection.scale *= 0.8;
-//     let projection = Projection::Orthographic(orthographic_projection);
-//     commands.spawn((
-//         Camera2d,
-//         Camera { ..default() },
-//         projection,
-//         CameraMovement(CameraMovementKind::FreeCamera),
-//     ));
-//     commands.spawn((
-//         Mesh2d(meshes.add(Rectangle::new(20.0, 20.0))),
-//         MeshMaterial2d(materials.add(Color::from(GREEN))),
-//     ));
-
-//     let mut rng = rng();
-//     let player_texture_handle = asset_server.load("default.png");
-//     for _i in 0..100 {
-//         // let random_multiplier = rng.random_range(1..=50);
-//         let random_multiplier = rng.random_range(5..=10);
-//         let random_speed = UPS_TARGET as u32 / random_multiplier;
-//         // let world_pos = rounded_tile_pos_to_world(GridPos { x: 0, y: 0 });
-
-//         // let mut sprite = Sprite::from_image(player_texture_handle.clone());
-//         let sprite = Sprite {
-//             image: player_texture_handle.clone(),
-//             // custom_size: Some(Vec2::new(32.0, 32.0)),
-//             ..default()
-//         };
-//         commands.spawn((
-//             Unit {
-//                 name: "Unit".into(),
-//             },
-//             sprite,
-//             // Transform::from_translation(world_pos.extend(0.0)),
-//             TileMovement::new(random_speed),
-//             GridPos { x: 0, y: 0 },
-//             Available,
-//             UnitUnitCollisions,
-//         ));
-//     }
-//     // let speed = u32::MAX;
-//     let speed = UPS_TARGET as u32 / 5;
-//     // let world_pos = rounded_tile_pos_to_world(GridPos { x: 5, y: 0 });
-//     // uses Unit required componenents to make it easier
-//     commands.spawn((
-//         Unit {
-//             name: "Player".into(),
-//         },
-//         Sprite::from_image(player_texture_handle.clone()),
-//         // Transform::from_translation(world_pos.extend(0.0)),
-//         GridPos { x: 5, y: 0 },
-//         TileMovement::new(speed),
-//         UnitUnitCollisions,
-//         Player,
-//     ));
-
-//     // provider chest
-//     let mut inventory = Inventory::new();
-//     inventory.add(ItemKind::Rock, 1000);
-//     let chest_entity = commands
-//         .spawn((
-//             Structure,
-//             Chest,
-//             Sprite::from_image(asset_server.load("structures/chest.png")),
-//             inventory,
-//             Provider,
-//         ))
-//         .id();
-//     let rounded_tile_pos = GridPos { x: 10, y: 5 };
-//     place_structure(
-//         &mut commands,
-//         &asset_server,
-//         &chest_entity,
-//         &mut structure_manager,
-//         &mut chunk_manager,
-//         rounded_tile_pos,
-//     );
-
-//     // provider chest 2
-//     let mut inventory = Inventory::new();
-//     inventory.add(ItemKind::Rock, 1000);
-//     let chest_entity = commands
-//         .spawn((
-//             Structure,
-//             Chest,
-//             Sprite::from_image(asset_server.load("structures/chest.png")),
-//             inventory,
-//             Provider,
-//         ))
-//         .id();
-//     let rounded_tile_pos = GridPos { x: 5, y: 10 };
-//     place_structure(
-//         &mut commands,
-//         &asset_server,
-//         &chest_entity,
-//         &mut structure_manager,
-//         &mut chunk_manager,
-//         rounded_tile_pos,
-//     );
-
-//     // provider chest 3
-//     let mut inventory = Inventory::new();
-//     inventory.add(ItemKind::Rock, 1000);
-//     let chest_entity = commands
-//         .spawn((
-//             Structure,
-//             Chest,
-//             Sprite::from_image(asset_server.load("structures/chest.png")),
-//             inventory,
-//             Provider,
-//         ))
-//         .id();
-//     let rounded_tile_pos = GridPos { x: 5, y: -10 };
-//     place_structure(
-//         &mut commands,
-//         &asset_server,
-//         &chest_entity,
-//         &mut structure_manager,
-//         &mut chunk_manager,
-//         rounded_tile_pos,
-//     );
-
-//     // requester chest
-//     let mut inventory = Inventory::new();
-//     inventory.add(ItemKind::Rock, 1);
-//     let chest_entity = commands
-//         .spawn((
-//             Structure,
-//             Chest,
-//             Sprite::from_image(asset_server.load("structures/chest.png")),
-//             inventory,
-//             Requester,
-//         ))
-//         .id();
-//     let rounded_tile_pos = GridPos { x: -10, y: 5 };
-//     place_structure(
-//         &mut commands,
-//         &asset_server,
-//         &chest_entity,
-//         &mut structure_manager,
-//         &mut chunk_manager,
-//         rounded_tile_pos,
-//     );
-
-//     // requester chest 2
-//     let mut inventory = Inventory::new();
-//     inventory.add(ItemKind::Rock, 1);
-//     let chest_entity = commands
-//         .spawn((
-//             Structure,
-//             Chest,
-//             Sprite::from_image(asset_server.load("structures/chest.png")),
-//             inventory,
-//             Requester,
-//         ))
-//         .id();
-//     let rounded_tile_pos = GridPos { x: -12, y: 5 };
-//     place_structure(
-//         &mut commands,
-//         &asset_server,
-//         &chest_entity,
-//         &mut structure_manager,
-//         &mut chunk_manager,
-//         rounded_tile_pos,
-//     );
-
-//     // crafter
-//     let crafter_entity = commands
-//         .spawn((
-//             Structure,
-//             Crafter,
-//             Sprite::from_image(asset_server.load("structures/crafter.png")),
-//         ))
-//         .id();
-//     let rounded_tile_pos = GridPos { x: -3, y: 5 };
-//     place_structure(
-//         &mut commands,
-//         &asset_server,
-//         &crafter_entity,
-//         &mut structure_manager,
-//         &mut chunk_manager,
-//         rounded_tile_pos,
-//     );
-// }
 
 pub fn update_logic_system(mut counter: ResMut<UpsCounter>) {
     counter.ticks += 1;
@@ -421,4 +298,14 @@ fn control_time_system(
         println!("Temps de la simulation réinitialisé à {} Hz.", UPS_TARGET);
         fixed_time.set_timestep_hz(UPS_TARGET as f64);
     }
+}
+
+#[derive(Resource)]
+struct WorldState {
+    weather: String,
+}
+
+#[derive(Resource)]
+struct DialogueEngine {
+    tera: Tera,
 }

@@ -1,0 +1,24 @@
+{# Ceci est un commentaire en Tera #}
+{# On vérifie d'abord la météo #}
+{% if weather == "Pluie" %}
+
+    {# Ensuite, on vérifie le niveau de colère de l'entité qui parle #}
+    {% if emotions.colere > 0.8 %}
+        MAIS C'EST PAS POSSIBLE CETTE PLUIE INCESSANTE ! ÇA ME REND FOU !
+    {% elif emotions.colere > 0.4 %}
+        Pff, encore cette pluie... Franchement, ça commence à bien m'énerver. Qu'est-ce que tu veux, {{ player_name }} ?
+    {% else %}
+        Quelle journée maussade avec cette pluie. Bonjour quand même, {{ player_name }}.
+    {% endif %}
+
+{% elif weather == "Soleil" %}
+
+    {% if emotions.colere > 0.5 %}
+        Même ce grand soleil n'arrive pas à calmer mes nerfs aujourd'hui.
+    {% else %}
+        Ah, quel plaisir ce soleil ! Bonjour, {{ player_name }} !
+    {% endif %}
+
+{% else %}
+    Bonjour, {{ player_name }}.
+{% endif %}
