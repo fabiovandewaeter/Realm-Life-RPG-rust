@@ -1,6 +1,6 @@
 use crate::units::{
     Player, Unit,
-    movements::{Direction, JustTeleported, TileMovement},
+    movements::{Direction, JustTeleported},
 };
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;

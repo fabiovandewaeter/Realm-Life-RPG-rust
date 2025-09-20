@@ -1,13 +1,9 @@
 use crate::{
     UPS_TARGET,
-    map::{
-        CurrentMap, GridPos, MapData, MapId, MultiMapManager, Structure, StructureManager,
-        is_tile_passable, rounded_tile_pos_to_world, world_pos_to_rounded_tile,
-    },
+    map::{CurrentMap, GridPos, MapId, MultiMapManager, Structure, rounded_tile_pos_to_world},
     units::{Unit, UnitUnitCollisions},
 };
 use bevy::{platform::collections::HashMap, prelude::*};
-use std::collections::HashSet;
 
 pub const UNIT_DEFAULT_MOVEMENT_SPEED: u32 = UPS_TARGET as u32; // ticks per tile ; smaller is faster (here its 1 tile per second at normal tickrate by default)
 

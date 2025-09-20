@@ -1,11 +1,10 @@
+use crate::UPS_TARGET;
 use crate::map::{
-    CurrentMap, GridPos, MapId, MultiMapManager, StructureManager, get_neighbors, is_tile_passable,
+    CurrentMap, GridPos, MapId, MultiMapManager, get_neighbors, is_tile_passable,
     world_pos_to_rounded_tile,
 };
-use crate::units::Unit;
 use crate::units::movements::{Direction, TileMovement};
 use crate::units::tasks::{ActionQueue, CurrentAction, reset_actions_system};
-use crate::{UPS_TARGET, map};
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use std::cmp::Ordering;

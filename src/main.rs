@@ -1,6 +1,6 @@
 use bevy::{
-    color::palettes::css::GREEN, diagnostic::FrameTimeDiagnosticsPlugin,
-    input::common_conditions::input_pressed, prelude::*, time::common_conditions::on_timer,
+    diagnostic::FrameTimeDiagnosticsPlugin, input::common_conditions::input_pressed, prelude::*,
+    time::common_conditions::on_timer,
 };
 use rand::{Rng, rng};
 use realm_life_rpg::{
@@ -9,12 +9,8 @@ use realm_life_rpg::{
         CameraMovement, CameraMovementKind, UpsCounter, display_fps_ups_system,
         handle_camera_inputs_system,
     },
-    items::{Inventory, ItemKind, display_inventories},
-    map::{
-        Chest, ChunkManager, Crafter, CurrentMap, GridPos, MapConfig, MapId, MapPlugin, MapType,
-        MultiMapManager, Portal, Provider, Requester, Structure, StructureManager,
-        create_house_map, place_structure,
-    },
+    items::display_inventories,
+    map::{CurrentMap, GridPos, MapConfig, MapId, MapPlugin, MapType, MultiMapManager, Portal},
     pathfinding::PathfindingPlugin,
     units::{
         Player, Unit, UnitUnitCollisions, UnitsPlugin,
@@ -50,7 +46,7 @@ fn main() {
             last_second: 0.0,
             ups: 0,
         })
-        .insert_resource(Time::<Fixed>::from_hz(UPS_TARGET))
+        .insert_resource(Time::<Fixed>::from_hz(UPS_TARGET as f64))
         .add_systems(Startup, setup_system)
         .add_systems(
             Update,
@@ -390,7 +386,7 @@ fn control_time_system(
     if input.just_pressed(KeyCode::Space) {
         if time_state.is_paused {
             println!("Temps de la simulation repris.");
-            fixed_time.set_timestep_hz(UPS_TARGET);
+            fixed_time.set_timestep_hz(UPS_TARGET as f64);
             time_state.is_paused = false;
         } else {
             println!("Temps de la simulation mis en pause.");
@@ -423,6 +419,6 @@ fn control_time_system(
     // Normal (retour à la vitesse initiale)
     if input.just_pressed(KeyCode::KeyI) {
         println!("Temps de la simulation réinitialisé à {} Hz.", UPS_TARGET);
-        fixed_time.set_timestep_hz(UPS_TARGET);
+        fixed_time.set_timestep_hz(UPS_TARGET as f64);
     }
 }
