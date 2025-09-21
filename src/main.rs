@@ -81,9 +81,9 @@ fn generate_npc_dialogue(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     // Accéder aux ressources globales.
     dialogue_engine: Res<DialogueEngine>,
-    world_state: Res<WorldState>,
+    mut world_state: ResMut<WorldState>,
     // Récupérer les données des entités PNJ et Joueur.
-    query_npc: Query<(&PersonName, &Emotions), With<Npc>>,
+    mut query_npc: Query<(&PersonName, &mut Emotions), With<Npc>>,
     query_player: Query<&PersonName, With<Player>>,
 ) {
     // On ne fait rien si la touche n'est pas pressée.
@@ -92,17 +92,21 @@ fn generate_npc_dialogue(
     }
 
     // On récupère le premier PNJ et le premier joueur trouvés (pour cet exemple simple).
-    let Ok((npc_name, npc_emotions)) = query_npc.get_single() else {
+    let Ok((npc_name, mut npc_emotions)) = query_npc.single_mut() else {
         return;
     };
-    let Ok(player_name) = query_player.get_single() else {
+    let Ok(player_name) = query_player.single() else {
         return;
     };
+    let mut rng = rand::thread_rng();
+    npc_emotions.colere = rng.gen_range(0.0..1.0);
+    let weathers = ["Pluie", "Soleil", "Nuages"];
+    world_state.weather = weathers[rng.gen_range(0..weathers.len())].to_string();
 
     // 1. On crée le "contexte" : c'est l'ensemble des données pour le template.
     let mut context = Context::new();
     context.insert("player_name", &player_name.0);
-    context.insert("emotions", npc_emotions); // On passe toute la struct Emotions
+    context.insert("emotions", &*npc_emotions); // On passe toute la struct Emotions
     context.insert("weather", &world_state.weather);
 
     // let names = dialogue_engine.tera.get_template_names();

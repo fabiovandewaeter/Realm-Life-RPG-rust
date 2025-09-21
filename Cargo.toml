@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 bevy = { version = "0.16.1", features = ["trace"] }
 bevy_ecs_tilemap = "0.16.0"
+bevy_egui = "0.36.0"
 bevy_simple_subsecond_system = "0.2.0"
 log = { version = "*", features = [
     "max_level_debug",

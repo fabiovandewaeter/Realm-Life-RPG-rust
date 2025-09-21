@@ -2,6 +2,7 @@ pub mod camera;
 pub mod items;
 pub mod map;
 pub mod pathfinding;
+pub mod ui;
 pub mod units;
 pub mod weather;
 
